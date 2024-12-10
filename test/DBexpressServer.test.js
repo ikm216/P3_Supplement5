@@ -1,7 +1,7 @@
 const request = require('supertest');
 const fs = require('fs');
 const mongoose = require('mongoose');
-const app = require('../server');
+const app = require('../DBexpressServer');
 
 
 const testFilePath = './content.txt';
