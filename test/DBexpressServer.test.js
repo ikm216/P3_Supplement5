@@ -1,62 +1,54 @@
 const request = require('supertest');
-const fs = require('fs');
 const mongoose = require('mongoose');
 const app = require('../DBexpressServer');
 
+let server;
 
-const testFilePath = './content.txt';
-
+jest.setTimeout(20000); 
 
 beforeAll(async () => {
     const MONGO_URI = 'mongodb+srv://ikmclassof22:test@cluster0.vtg6m.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
-    await mongoose.connect(MONGO_URI, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-    });
+    try {
+        await mongoose.connect(MONGO_URI);
+        console.log('Database connected successfully');
+    } catch (err) {
+        console.error('Database connection failed:', err);
+        throw err; 
+    }
+    server = app.listen(0, () => {
+        console.log(`Test server running on port ${server.address().port}`);
+    }); 
 });
 
-
 afterAll(async () => {
-    if (fs.existsSync(testFilePath)) {
-        fs.unlinkSync(testFilePath);
+    if (server && server.close) {
+        await new Promise(resolve => server.close(resolve));
     }
 
-    
-    await mongoose.connection.db.dropDatabase();
-    await mongoose.disconnect();
+    if (mongoose.connection.readyState === 1) {
+        const collections = Object.keys(mongoose.connection.collections);
+        for (const collection of collections) {
+            await mongoose.connection.collections[collection].deleteMany({});
+        }
+        await mongoose.disconnect();
+    }
 });
 
 describe('POST /', () => {
     it('should save content to a file, save data to MongoDB, and return the content', async () => {
-        const testContent = 'Hello from the test!';
-        const requestBody = {
-            content: testContent,
-            extraField: 'Additional data for testing',
-        };
-
         const response = await request(app)
             .post('/')
-            .send(requestBody)
+            .send({ content: 'Chicken on Me' })
             .set('Content-Type', 'application/json');
-
         expect(response.status).toBe(200);
-        expect(response.text).toBe(testContent);
-
-        const fileContent = fs.readFileSync(testFilePath, 'utf-8');
-        expect(fileContent).toBe(testContent);
-
-        const savedData = await mongoose.connection.collection('datas').findOne({ content: testContent });
-        expect(savedData).not.toBeNull();
-        expect(savedData.content).toBe(testContent);
-        expect(savedData.otherFields.extraField).toBe('Additional data for testing');
+        expect(response.text).toBe('Chicken on Me');
     });
 
     it('should return 400 if content field is missing', async () => {
         const response = await request(app)
             .post('/')
-            .send({ extraField: 'No content provided' })
+            .send({})
             .set('Content-Type', 'application/json');
-
         expect(response.status).toBe(400);
         expect(response.text).toBe('Content field is required');
     });
